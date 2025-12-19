@@ -39,7 +39,7 @@ app.post('/api/profit', (req, res) => {
   res.json({ status: 'Profit saved' });
 });
 
-// ✅ THIS WAS MISSING
+//  THIS WAS MISSING
 app.get('/api/profits', (req, res) => {
   res.json(userProfits);
 });
