@@ -76,56 +76,73 @@ button.secondary{background:#1c2540;color:#fff}
 <script>
 // Simple admin key
 const ADMIN_SECRET = "SUPER_SECRET_KEY";
-let userProfits = JSON.parse(localStorage.getItem("userProfits") || "{}");
-let globalMetrics = JSON.parse(localStorage.getItem("globalMetrics") || {targetApy:"40%", activeApy:"28%", dailyPerf:"+0.8%"});
 
-function login(){
+// Login function
+async function login(){
   const key = document.getElementById('adminKey').value;
   if(key !== ADMIN_SECRET) return alert('Invalid admin key');
   document.getElementById('login').classList.add('hidden');
   document.getElementById('dashboard').classList.remove('hidden');
 
-  // Load saved metrics
-  targetApy.value = globalMetrics.targetApy;
-  activeApy.value = globalMetrics.activeApy;
-  dailyPerf.value = globalMetrics.dailyPerf;
+  // Load metrics from server
+  const res = await fetch('/api/metrics');
+  const metrics = await res.json();
+  targetApy.value = metrics.targetApy;
+  activeApy.value = metrics.activeApy;
+  dailyPerf.value = metrics.dailyPerf;
 
   renderUserTable();
 }
 
-// Save metrics to localStorage
-function saveMetrics(){
-  globalMetrics = {
+// Save metrics to server
+async function saveMetrics(){
+  const metrics = {
     targetApy: targetApy.value,
     activeApy: activeApy.value,
     dailyPerf: dailyPerf.value
   };
-  localStorage.setItem("globalMetrics", JSON.stringify(globalMetrics));
-  document.getElementById('status').textContent = 'Metrics updated';
+  const res = await fetch('/api/metrics', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(metrics)
+  });
+  const data = await res.json();
+  document.getElementById('status').textContent = data.status;
 }
 
-// Set profit manually for a user
-function setProfit(){
+// Save user profit to server
+async function setProfit(){
   const w = wallet.value.trim();
   const p = profit.value.trim();
   if(!w || !p) return alert("Enter wallet and profit");
-  userProfits[w] = p;
-  localStorage.setItem("userProfits", JSON.stringify(userProfits));
-  document.getElementById('status').textContent = 'Profit saved';
+
+  const res = await fetch('/api/profit', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ wallet: w, profit: p })
+  });
+  const data = await res.json();
+  document.getElementById('status').textContent = data.status;
+
   wallet.value = ""; profit.value = "";
   renderUserTable();
 }
 
 // Render all users table
-function renderUserTable(){
+async function renderUserTable(){
   const table = document.getElementById('userTable');
   table.innerHTML = '<div class="row"><strong>Wallet</strong><strong>Profit</strong><strong>Action</strong></div>';
-  Object.keys(userProfits).forEach(w=>{
+
+  // Fetch all profits from server
+  const res = await fetch('/api/profits');
+  const allProfits = await res.json();
+
+  Object.keys(allProfits).forEach(w => {
     const row = document.createElement('div');
     row.className='row';
     row.innerHTML = `
       <input type="text" value="${w}" readonly />
-      <input type="text" value="${userProfits[w]}" />
+      <input type="text" value="${allProfits[w]}" />
       <button onclick="updateProfit('${w}', this)">Update</button>
     `;
     table.appendChild(row);
@@ -133,12 +150,19 @@ function renderUserTable(){
 }
 
 // Update profit from table input
-function updateProfit(wallet, btn){
+async function updateProfit(wallet, btn){
   const newProfit = btn.previousElementSibling.value.trim();
   if(!newProfit) return alert("Enter a value");
-  userProfits[wallet] = newProfit;
-  localStorage.setItem("userProfits", JSON.stringify(userProfits));
-  document.getElementById('status').textContent = 'Profit updated';
+
+  const res = await fetch('/api/profit', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ wallet, profit: newProfit })
+  });
+  const data = await res.json();
+  document.getElementById('status').textContent = data.status;
+
+  renderUserTable();
 }
 </script>
 </body>
