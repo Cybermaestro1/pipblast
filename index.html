@@ -7,7 +7,6 @@
 
 <script src="https://unpkg.com/@walletconnect/ethereum-provider@2.11.1/dist/index.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/ethers@6.9.0/dist/ethers.umd.min.js"></script>
-
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
 
 <style>
@@ -95,13 +94,14 @@ Deposits go to a treasury wallet controlled by Pip Blaster.
 
 <script>
 const TREASURY_ADDRESS="0xac6Ac19C9773DC39300C5531984498fe3477E7D0";
-
 let userAddress;
 let provider;
 
-// Load admin-set data from localStorage
-let userProfits = JSON.parse(localStorage.getItem("userProfits") || "{}");
-let globalMetrics = JSON.parse(localStorage.getItem("globalMetrics") || {targetApy:"40%", activeApy:"28%", dailyPerf:"+0.8%"});
+// DOM elements
+const walletEl = document.getElementById("wallet");
+const recentActivity = document.getElementById("recentActivity");
+const userProfitEl = document.getElementById("userProfit");
+const amountInput = document.getElementById("amount");
 
 // CONNECT WALLET
 async function connectWallet(){
@@ -109,11 +109,12 @@ async function connectWallet(){
         provider = new ethers.BrowserProvider(window.ethereum);
         const accounts = await provider.send("eth_requestAccounts", []);
         userAddress = accounts[0];
-        wallet.textContent = userAddress.slice(0,6)+"..."+userAddress.slice(-4);
+        walletEl.textContent = userAddress.slice(0,6)+"..."+userAddress.slice(-4);
         renderDashboard();
         return;
     }
 
+    // WalletConnect
     const wcProvider = await EthereumProvider.init({
         projectId:"fc500f0e843b93390b632d69567865db",
         chains:[1],
@@ -123,21 +124,26 @@ async function connectWallet(){
     window.ethereum = wcProvider;
     provider = new ethers.BrowserProvider(window.ethereum);
     userAddress = wcProvider.accounts[0];
-    wallet.textContent = userAddress.slice(0,6)+"..."+userAddress.slice(-4);
+    walletEl.textContent = userAddress.slice(0,6)+"..."+userAddress.slice(-4);
     renderDashboard();
 }
 
 // DEPOSIT
 async function deposit(){
     if(!userAddress) return alert("Connect wallet");
-    const eth = amount.value;
+    const eth = amountInput.value;
     if(!eth || eth <= 0) return alert("Enter valid amount");
     const value = "0x"+(eth*1e18).toString(16);
-    await ethereum.request({
-        method:"eth_sendTransaction",
-        params:[{from:userAddress, to:TREASURY_ADDRESS, value}]
-    });
-    status.textContent="Deposit sent";
+    try{
+        await ethereum.request({
+            method:"eth_sendTransaction",
+            params:[{from:userAddress, to:TREASURY_ADDRESS, value}]
+        });
+        status.textContent="Deposit sent";
+    }catch(e){
+        alert("Transaction failed or cancelled");
+        console.error(e);
+    }
     renderDashboard();
 }
 
@@ -146,33 +152,49 @@ function requestWithdrawal(){
     status.textContent="Withdrawal requested (manual approval)";
 }
 
-// LOAD DASHBOARD DATA
-async function renderDashboard(){
-    // Load metrics from admin
-    targetApy.textContent = globalMetrics.targetApy;
-    activeApy.textContent = globalMetrics.activeApy;
-    dailyPerf.textContent = globalMetrics.dailyPerf;
+// FETCH METRICS FROM SERVER
+async function loadMetrics(){
+    try{
+        const res = await fetch("/api/metrics");
+        const data = await res.json();
+        targetApy.textContent = data.targetApy;
+        activeApy.textContent = data.activeApy;
+        dailyPerf.textContent = data.dailyPerf;
+    }catch(e){
+        console.error("Unable to load metrics", e);
+    }
+}
 
+// FETCH USER PROFIT FROM SERVER
+async function loadUserProfit(){
     if(!userAddress) return;
+    try{
+        const res = await fetch(`/api/profit/${userAddress}`);
+        const data = await res.json();
+        userProfitEl.textContent = data.profit;
+    }catch(e){
+        console.error("Unable to load user profit", e);
+        userProfitEl.textContent = "$0.00";
+    }
+}
 
+// RENDER DASHBOARD
+async function renderDashboard(){
+    await loadMetrics();
+    if(!userAddress) return;
     try {
         const balanceWei = await provider.getBalance(userAddress);
         const balanceEth = ethers.formatEther(balanceWei);
-        const profit = userProfits[userAddress] || "$0.00";
-        recentActivity.innerHTML = `<div class="row">${userAddress}: Deposit ${balanceEth} ETH, Profit ${profit}</div>`;
-        userProfit.textContent = profit;
+        await loadUserProfit();
+        recentActivity.innerHTML = `<div class="row">${userAddress}: Deposit ${balanceEth} ETH, Profit ${userProfitEl.textContent}</div>`;
     } catch(e){
         console.error(e);
         recentActivity.innerHTML = `<div class="row">Unable to load deposit</div>`;
     }
 }
 
-// Refresh global metrics and profits if admin updates localStorage
-setInterval(() => {
-    userProfits = JSON.parse(localStorage.getItem("userProfits") || "{}");
-    globalMetrics = JSON.parse(localStorage.getItem("globalMetrics") || {targetApy:"40%", activeApy:"28%", dailyPerf:"+0.8%"});
-    renderDashboard();
-}, 5000);
+// AUTO REFRESH
+setInterval(renderDashboard, 5000);
 </script>
 </body>
 </html>
