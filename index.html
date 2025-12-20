@@ -204,6 +204,18 @@ async function loadUserProfit(){
         userProfitEl.textContent = "$0.00";
     }
 }
+async function loadUserProfitSupabase() {
+  if(!userAddress) return;
+  try {
+    const res = await fetch(`/api/profit-supabase/${userAddress}`);
+    const data = await res.json();
+    userProfitEl.textContent = data.profit;
+  } catch(e) {
+    console.error('Supabase user profit load failed', e);
+    userProfitEl.textContent = "$0.00";
+  }
+}
+
 
 // RENDER DASHBOARD
 async function renderDashboard(){
