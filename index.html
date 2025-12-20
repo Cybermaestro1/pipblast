@@ -182,7 +182,7 @@ function requestWithdrawal(){
 // FETCH METRICS FROM SERVER
 async function loadMetrics(){
     try{
-        const res = await fetch("/api/metrics");
+        const res = await fetch('/api/metrics-supabase');
         const data = await res.json();
         targetApy.textContent = data.targetApy;
         activeApy.textContent = data.activeApy;
@@ -196,7 +196,7 @@ async function loadMetrics(){
 async function loadUserProfit(){
     if(!userAddress) return;
     try{
-        const res = await fetch(`/api/profit/${userAddress}`);
+        const res = await fetch(`/api/profit-supabase/${userAddress}`);
         const data = await res.json();
         userProfitEl.textContent = data.profit;
     }catch(e){
