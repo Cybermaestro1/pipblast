@@ -86,18 +86,22 @@ const ADMIN_SECRET = "SUPER_SECRET_KEY";
 
 // Login function
 async function login(){
-  const key = document.getElementById('adminKey').value;
-  if(key !== ADMIN_SECRET) return alert('Invalid admin key');
+  const key = document.getElementById('adminKey').value.trim();
+
+  if(key !== ADMIN_SECRET){
+    alert('Invalid admin key');
+    return;
+  }
+
   document.getElementById('login').classList.add('hidden');
   document.getElementById('dashboard').classList.remove('hidden');
 
-  // Load metrics from server
   const res = await fetch('/api/metrics-supabase');
   const metrics = await res.json();
+
   targetApy.value = metrics.targetApy;
   activeApy.value = metrics.activeApy;
   dailyPerf.value = metrics.dailyPerf;
-
 
   renderUserTable();
 }
