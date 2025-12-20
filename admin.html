@@ -1,82 +1,168 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Pip Blaster — Admin</title>
-
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Pip Blaster — Admin Dashboard</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
 <style>
-body{background:#05080f;color:#fff;font-family:Inter;padding:40px}
-.card{background:#0e1526;padding:20px;border-radius:16px;max-width:420px}
-input,button{width:100%;padding:12px;margin-top:10px;border-radius:10px;border:none}
-button{background:#00ffd1;font-weight:700;cursor:pointer}
-.status{margin-top:10px;color:#00ffd1}
+:root{
+  --bg:#05080f;
+  --card:#0e1526;
+  --accent:#00ffd1;
+  --muted:#9aa4b2;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:#fff}
+.wrapper{max-width:1100px;margin:auto;padding:40px 20px}
+.card{background:var(--card);border-radius:18px;padding:24px;margin-bottom:24px;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+h1{margin:0 0 8px}
+.sub{color:var(--muted);font-size:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+input,button{width:100%;padding:12px;border-radius:12px;border:none;margin-top:10px;font-size:14px}
+button{background:linear-gradient(135deg,#00ffd1,#6ae3ff);font-weight:700;cursor:pointer}
+button.secondary{background:#1c2540;color:#fff}
+.table{margin-top:14px}
+.row{display:flex;justify-content:space-between;font-size:13px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+.row input{width:60%;padding:6px;border-radius:6px;border:none}
+.status{margin-top:12px;color:var(--accent);font-size:13px}
+.hidden{display:none}
 </style>
 </head>
-
 <body>
-<div class="card" id="login">
-<h3>Admin Login</h3>
-<input id="key" type="password" placeholder="Admin key"/>
-<button onclick="login()">Login</button>
+<div class="wrapper">
+
+<h1>Pip Blaster — Admin</h1>
+<div class="sub">Restricted access · Operator controls</div>
+
+<div id="login" class="card">
+  <h3>Admin Login</h3>
+  <input id="adminKey" type="password" placeholder="Enter admin key" />
+  <button onclick="login()">Login</button>
 </div>
 
-<div class="card" id="panel" style="display:none">
-<h3>Metrics</h3>
-<input id="targetApy" placeholder="Target APY"/>
-<input id="activeApy" placeholder="Active APY"/>
-<input id="dailyPerf" placeholder="Daily Perf"/>
-<button onclick="saveMetrics()">Save Metrics</button>
+<div id="dashboard" class="hidden">
 
-<h3 style="margin-top:20px">User Profit</h3>
-<input id="wallet" placeholder="Wallet"/>
-<input id="profit" placeholder="Profit"/>
-<button onclick="saveProfit()">Save Profit</button>
+<div class="card">
+<h3>Edit Global Metrics</h3>
+<div class="grid">
+  <input id="targetApy" placeholder="Target APY (e.g. 45%)" />
+  <input id="activeApy" placeholder="Active APY (e.g. 32%)" />
+  <input id="dailyPerf" placeholder="Daily Performance (e.g. +1.1%)" />
+</div>
+<button onclick="saveMetrics()">Save Metrics</button>
+</div>
+
+<div class="card">
+<h3>Set User Profit</h3>
+<input id="wallet" placeholder="User wallet address" />
+<input id="profit" placeholder="Profit amount (e.g. $3,450.75)" />
+<button onclick="setProfit()">Save Profit</button>
+</div>
+
+<div class="card">
+<h3>All Users & Profits</h3>
+<div id="userTable" class="table">
+  <div class="row"><strong>Wallet</strong><strong>Profit</strong><strong>Action</strong></div>
+</div>
+</div>
+
+</div>
 
 <div class="status" id="status"></div>
+
 </div>
 
 <script>
-const ADMIN_KEY="SUPER_SECRET_KEY";
+// Simple admin key
+const ADMIN_SECRET = "SUPER_SECRET_KEY";
 
-function login(){
-  if(key.value!==ADMIN_KEY) return alert("Invalid");
-  login.style.display="none";
-  panel.style.display="block";
-  loadMetrics();
+// Login function
+async function login(){
+  const key = document.getElementById('adminKey').value;
+  if(key !== ADMIN_SECRET) return alert('Invalid admin key');
+  document.getElementById('login').classList.add('hidden');
+  document.getElementById('dashboard').classList.remove('hidden');
+
+  // Load metrics from server
+  const res = await fetch('/api/metrics');
+  const metrics = await res.json();
+  targetApy.value = metrics.targetApy;
+  activeApy.value = metrics.activeApy;
+  dailyPerf.value = metrics.dailyPerf;
+
+  renderUserTable();
 }
 
-async function loadMetrics(){
-  const r=await fetch("/api/metrics");
-  const d=await r.json();
-  targetApy.value=d.targetApy;
-  activeApy.value=d.activeApy;
-  dailyPerf.value=d.dailyPerf;
-}
-
+// Save metrics to server
 async function saveMetrics(){
-  await fetch("/api/metrics",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({
-      targetApy:targetApy.value,
-      activeApy:activeApy.value,
-      dailyPerf:dailyPerf.value
-    })
+  const metrics = {
+    targetApy: targetApy.value,
+    activeApy: activeApy.value,
+    dailyPerf: dailyPerf.value
+  };
+  const res = await fetch('/api/metrics', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(metrics)
   });
-  status.textContent="Metrics updated";
+  const data = await res.json();
+  document.getElementById('status').textContent = data.status;
 }
 
-async function saveProfit(){
-  await fetch("/api/profit",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({
-      wallet:wallet.value,
-      profit:profit.value
-    })
+// Save user profit to server
+async function setProfit(){
+  const w = wallet.value.trim();
+  const p = profit.value.trim();
+  if(!w || !p) return alert("Enter wallet and profit");
+
+  const res = await fetch('/api/profit', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ wallet: w, profit: p })
   });
-  status.textContent="Profit saved";
+  const data = await res.json();
+  document.getElementById('status').textContent = data.status;
+
+  wallet.value = ""; profit.value = "";
+  renderUserTable();
+}
+
+// Render all users table
+async function renderUserTable(){
+  const table = document.getElementById('userTable');
+  table.innerHTML = '<div class="row"><strong>Wallet</strong><strong>Profit</strong><strong>Action</strong></div>';
+
+  // Fetch all profits from server
+  const res = await fetch('/api/profits');
+  const allProfits = await res.json();
+
+  Object.keys(allProfits).forEach(w => {
+    const row = document.createElement('div');
+    row.className='row';
+    row.innerHTML = `
+      <input type="text" value="${w}" readonly />
+      <input type="text" value="${allProfits[w]}" />
+      <button onclick="updateProfit('${w}', this)">Update</button>
+    `;
+    table.appendChild(row);
+  });
+}
+
+// Update profit from table input
+async function updateProfit(wallet, btn){
+  const newProfit = btn.previousElementSibling.value.trim();
+  if(!newProfit) return alert("Enter a value");
+
+  const res = await fetch('/api/profit', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ wallet, profit: newProfit })
+  });
+  const data = await res.json();
+  document.getElementById('status').textContent = data.status;
+
+  renderUserTable();
 }
 </script>
 </body>
