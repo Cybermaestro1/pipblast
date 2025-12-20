@@ -50,14 +50,14 @@ button.secondary{background:#1c2540;color:#fff}
   <input id="activeApy" placeholder="Active APY (e.g. 32%)" />
   <input id="dailyPerf" placeholder="Daily Performance (e.g. +1.1%)" />
 </div>
-<button onclick="saveMetrics()">Save Metrics</button>
+<button onclick="saveMetricsSupabase()">Save Metrics</button>
 </div>
 
 <div class="card">
 <h3>Set User Profit</h3>
 <input id="wallet" placeholder="User wallet address" />
 <input id="profit" placeholder="Profit amount (e.g. $3,450.75)" />
-<button onclick="setProfit()">Save Profit</button>
+<button onclick="setProfitSupabase()">Save Metrics</button>
 </div>
 
 <div class="card">
@@ -92,11 +92,12 @@ async function login(){
   document.getElementById('dashboard').classList.remove('hidden');
 
   // Load metrics from server
-  const res = await fetch('/api/metrics');
+  const res = await fetch('/api/metrics-supabase');
   const metrics = await res.json();
   targetApy.value = metrics.targetApy;
   activeApy.value = metrics.activeApy;
   dailyPerf.value = metrics.dailyPerf;
+
 
   renderUserTable();
 }
@@ -113,7 +114,7 @@ async function loadMetricsSupabase() {
   }
 }
 
-
+///
 // Save metrics to server
 async function saveMetrics(){
   const metrics = {
@@ -129,16 +130,15 @@ async function saveMetrics(){
   const data = await res.json();
   document.getElementById('status').textContent = data.status;
 }
+  
 async function saveMetricsSupabase() {
   try {
     const res = await fetch('/api/metrics-supabase', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        targetApy: targetApy.value,
-        activeApy: activeApy.value,
-        dailyPerf: dailyPerf.value
-      })
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ targetApy: targetApy.value, activeApy: activeApy.value, dailyPerf: dailyPerf.value })
+    });
+
     });
     const data = await res.json();
     document.getElementById('status').textContent = data.status;
@@ -197,8 +197,9 @@ async function renderUserTable(){
   table.innerHTML = '<div class="row"><strong>Wallet</strong><strong>Profit</strong><strong>Action</strong></div>';
 
   // Fetch all profits from server
-  const res = await fetch('/api/profits');
-  const allProfits = await res.json();
+  const res = await fetch(`/api/profit-supabase/${wallet}`);
+  const data = await res.json();
+
 
   Object.keys(allProfits).forEach(w => {
     const row = document.createElement('div');
@@ -217,11 +218,12 @@ async function updateProfit(wallet, btn){
   const newProfit = btn.previousElementSibling.value.trim();
   if(!newProfit) return alert("Enter a value");
 
-  const res = await fetch('/api/profit', {
+  const res = await fetch('/api/profit-supabase', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ wallet, profit: newProfit })
+    body: JSON.stringify({ wallet, profit })
   });
+
   const data = await res.json();
   document.getElementById('status').textContent = data.status;
 
