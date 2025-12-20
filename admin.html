@@ -100,6 +100,19 @@ async function login(){
 
   renderUserTable();
 }
+// --- Optional Supabase fetch (new) ---
+async function loadMetricsSupabase() {
+  try {
+    const res = await fetch('/api/metrics-supabase');
+    const metrics = await res.json();
+    targetApy.value = metrics.targetApy;
+    activeApy.value = metrics.activeApy;
+    dailyPerf.value = metrics.dailyPerf;
+  } catch(e) {
+    console.error('Supabase metrics load failed', e);
+  }
+}
+
 
 // Save metrics to server
 async function saveMetrics(){
@@ -116,6 +129,24 @@ async function saveMetrics(){
   const data = await res.json();
   document.getElementById('status').textContent = data.status;
 }
+async function saveMetricsSupabase() {
+  try {
+    const res = await fetch('/api/metrics-supabase', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        targetApy: targetApy.value,
+        activeApy: activeApy.value,
+        dailyPerf: dailyPerf.value
+      })
+    });
+    const data = await res.json();
+    document.getElementById('status').textContent = data.status;
+  } catch(e) {
+    console.error('Supabase metrics save failed', e);
+  }
+}
+
 
 // Save user profit to server
 async function setProfit(){
@@ -134,6 +165,31 @@ async function setProfit(){
   wallet.value = ""; profit.value = "";
   renderUserTable();
 }
+async function loadUserProfitSupabase(wallet) {
+  try {
+    const res = await fetch(`/api/profit-supabase/${wallet}`);
+    const data = await res.json();
+    return data.profit;
+  } catch(e) {
+    console.error('Supabase profit load failed', e);
+    return "$0.00";
+  }
+}
+
+async function setProfitSupabase(wallet, profit) {
+  try {
+    const res = await fetch('/api/profit-supabase', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ wallet, profit })
+    });
+    const data = await res.json();
+    document.getElementById('status').textContent = data.status;
+  } catch(e) {
+    console.error('Supabase profit save failed', e);
+  }
+}
+
 
 // Render all users table
 async function renderUserTable(){
