@@ -29,6 +29,7 @@ button.secondary{background:#1c2540;color:#fff}
 .hidden{display:none}
 </style>
 </head>
+
 <body>
 <div class="wrapper">
 
@@ -43,51 +44,49 @@ button.secondary{background:#1c2540;color:#fff}
 
 <div id="dashboard" class="hidden">
 
-<div class="card">
-<h3>Edit Global Metrics</h3>
-<div class="grid">
-  <input id="targetApy" placeholder="Target APY (e.g. 45%)" />
-  <input id="activeApy" placeholder="Active APY (e.g. 32%)" />
-  <input id="dailyPerf" placeholder="Daily Performance (e.g. +1.1%)" />
-</div>
-<button onclick="saveMetricsSupabase()">Save Metrics</button>
-</div>
+  <div class="card">
+    <h3>Edit Global Metrics</h3>
+    <div class="grid">
+      <input id="targetApy" placeholder="Target APY (e.g. 45%)" />
+      <input id="activeApy" placeholder="Active APY (e.g. 32%)" />
+      <input id="dailyPerf" placeholder="Daily Performance (e.g. +1.1%)" />
+    </div>
+    <button onclick="saveMetricsSupabase()">Save Metrics</button>
+  </div>
 
-<div class="card">
-<h3>Set User Profit</h3>
-<input id="wallet" placeholder="User wallet address" />
-<input id="profit" placeholder="Profit amount (e.g. $3,450.75)" />
-<button onclick="setProfitSupabase()">Save Metrics</button>
-</div>
+  <div class="card">
+    <h3>Set User Profit</h3>
+    <input id="wallet" placeholder="User wallet address" />
+    <input id="profit" placeholder="Profit amount (e.g. $3,450.75)" />
+    <button onclick="setProfitSupabase()">Save Profit</button>
+  </div>
 
-<div class="card">
-<h3>All Users & Profits</h3>
-<div id="userTable" class="table">
-  <div class="row"><strong>Wallet</strong><strong>Profit</strong><strong>Action</strong></div>
-</div>
-</div>
+  <div class="card">
+    <h3>All Users & Profits</h3>
+    <div id="userTable" class="table">
+      <div class="row"><strong>Wallet</strong><strong>Profit</strong><strong>Action</strong></div>
+    </div>
+  </div>
 
 </div>
 
 <div class="status" id="status"></div>
-
 </div>
 
 <script>
-  // DOM elements
+// DOM
 const targetApy = document.getElementById("targetApy");
 const activeApy = document.getElementById("activeApy");
 const dailyPerf = document.getElementById("dailyPerf");
 const wallet = document.getElementById("wallet");
 const profit = document.getElementById("profit");
 
-// Simple admin key
+// Admin key
 const ADMIN_SECRET = "SUPER_SECRET_KEY";
 
-// Login function
+// Login
 async function login(){
   const key = document.getElementById('adminKey').value.trim();
-
   if(key !== ADMIN_SECRET){
     alert('Invalid admin key');
     return;
@@ -105,109 +104,58 @@ async function login(){
 
   renderUserTable();
 }
-// --- Optional Supabase fetch (new) ---
-async function loadMetricsSupabase() {
-  try {
-    const res = await fetch('/api/metrics-supabase');
-    const metrics = await res.json();
-    targetApy.value = metrics.targetApy;
-    activeApy.value = metrics.activeApy;
-    dailyPerf.value = metrics.dailyPerf;
-  } catch(e) {
-    console.error('Supabase metrics load failed', e);
-  }
-}
 
-///
-// Save metrics to server
-async function saveMetrics(){
-  const metrics = {
-    targetApy: targetApy.value,
-    activeApy: activeApy.value,
-    dailyPerf: dailyPerf.value
-  };
-  const res = await fetch('/api/metrics', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify(metrics)
-  });
-  const data = await res.json();
-  document.getElementById('status').textContent = data.status;
-}
-  
+// Save metrics (Supabase)
 async function saveMetricsSupabase() {
   try {
     const res = await fetch('/api/metrics-supabase', {
       method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ targetApy: targetApy.value, activeApy: activeApy.value, dailyPerf: dailyPerf.value })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        targetApy: targetApy.value,
+        activeApy: activeApy.value,
+        dailyPerf: dailyPerf.value
+      })
     });
 
-    });
     const data = await res.json();
     document.getElementById('status').textContent = data.status;
-  } catch(e) {
+  } catch (e) {
     console.error('Supabase metrics save failed', e);
   }
 }
 
-
-// Save user profit to server
-async function setProfit(){
+// Set profit (Supabase)
+async function setProfitSupabase(){
   const w = wallet.value.trim();
   const p = profit.value.trim();
   if(!w || !p) return alert("Enter wallet and profit");
 
-  const res = await fetch('/api/profit', {
+  const res = await fetch('/api/profit-supabase', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ wallet: w, profit: p })
   });
+
   const data = await res.json();
   document.getElementById('status').textContent = data.status;
 
-  wallet.value = ""; profit.value = "";
+  wallet.value = "";
+  profit.value = "";
   renderUserTable();
 }
-async function loadUserProfitSupabase(wallet) {
-  try {
-    const res = await fetch(`/api/profit-supabase/${wallet}`);
-    const data = await res.json();
-    return data.profit;
-  } catch(e) {
-    console.error('Supabase profit load failed', e);
-    return "$0.00";
-  }
-}
 
-async function setProfitSupabase(wallet, profit) {
-  try {
-    const res = await fetch('/api/profit-supabase', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ wallet, profit })
-    });
-    const data = await res.json();
-    document.getElementById('status').textContent = data.status;
-  } catch(e) {
-    console.error('Supabase profit save failed', e);
-  }
-}
-
-
-// Render all users table
+// Render users
 async function renderUserTable(){
   const table = document.getElementById('userTable');
   table.innerHTML = '<div class="row"><strong>Wallet</strong><strong>Profit</strong><strong>Action</strong></div>';
 
-  // Fetch all profits from server
-  const res = await fetch(`/api/profit-supabase/${wallet}`);
-  const data = await res.json();
-
+  const res = await fetch('/api/profits-supabase');
+  const allProfits = await res.json();
 
   Object.keys(allProfits).forEach(w => {
     const row = document.createElement('div');
-    row.className='row';
+    row.className = 'row';
     row.innerHTML = `
       <input type="text" value="${w}" readonly />
       <input type="text" value="${allProfits[w]}" />
@@ -217,7 +165,7 @@ async function renderUserTable(){
   });
 }
 
-// Update profit from table input
+// Update profit inline
 async function updateProfit(wallet, btn){
   const newProfit = btn.previousElementSibling.value.trim();
   if(!newProfit) return alert("Enter a value");
@@ -225,7 +173,7 @@ async function updateProfit(wallet, btn){
   const res = await fetch('/api/profit-supabase', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ wallet, profit })
+    body: JSON.stringify({ wallet, profit: newProfit })
   });
 
   const data = await res.json();
